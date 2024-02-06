@@ -1,0 +1,29 @@
+CREATE TABLE public."Audits" (
+	"Operation" text NULL,
+	"When" timestamptz NOT NULL,
+	"Who" text NULL,
+	"Name" text NULL,
+	"Salary" numeric NOT NULL
+);
+
+CREATE OR REPLACE FUNCTION process_emp_audit() RETURNS TRIGGER AS $emp_audit$
+    begin
+        --
+        -- Create a row in emp_audit to reflect the operation performed on emp,
+        -- making use of the special variable TG_OP to work out the operation.
+        --
+        IF (TG_OP = 'DELETE') THEN
+            INSERT INTO public."Audits" SELECT 'D', now(), current_setting('triggeraudit.user'), OLD."Name", OLD."Salary";
+        ELSIF (TG_OP = 'UPDATE') THEN
+            INSERT INTO public."Audits" SELECT 'U', now(), current_setting('triggeraudit.user'), NEW."Name", NEW."Salary";
+        ELSIF (TG_OP = 'INSERT') THEN
+            INSERT INTO public."Audits" SELECT 'I', now(), current_setting('triggeraudit.user'), NEW."Name", NEW."Salary";
+        END IF;
+        RETURN NULL; -- result is ignored since this is an AFTER trigger
+    END;
+$emp_audit$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER emp_audit
+AFTER INSERT OR UPDATE OR DELETE ON public."Employees"
+    FOR EACH ROW EXECUTE FUNCTION process_emp_audit();
